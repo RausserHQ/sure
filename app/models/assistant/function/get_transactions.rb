@@ -36,10 +36,13 @@ class Assistant::Function::GetTransactions < Assistant::Function
         - `total_expenses`: The total expenses for the given filters
 
         Each transaction retains the absolute `amount` for compatibility. `signed_amount`
-        is the stored entry amount: negative means cash inflow, positive means cash
-        outflow. `kind`, `excluded`, `pending`, and `source` reflect stored ledger
-        metadata. Transfer and counterpart ids/account details are null when unmatched;
-        counterpart details are also null when the account is inaccessible.
+        is the raw stored Entry amount. Sure's transaction classification treats negative
+        as income/inflow and nonnegative as expense/outflow, but liability/debt direction
+        must not be inferred from sign alone. `kind`, `excluded`, `pending`, and `source`
+        reflect stored ledger metadata. `transfer_role` is `inflow` or `outflow` for a
+        matched transfer, and null when unmatched. Transfer and counterpart ids/account
+        details are null when unmatched; counterpart details are also null when the
+        account is inaccessible.
       INSTRUCTIONS
     end
   end
@@ -214,6 +217,7 @@ class Assistant::Function::GetTransactions < Assistant::Function
         pending: txn.pending?,
         source: entry.source,
         transfer_id: transfer&.id,
+        transfer_role: transfer && (transfer.inflow_transaction_id == txn.id ? "inflow" : "outflow"),
         counterpart_transaction_id: counterpart&.id,
         counterpart_account_id: counterpart&.entry&.account_id,
         counterpart_account_name: counterpart&.entry&.account&.name

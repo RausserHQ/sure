@@ -38,6 +38,7 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal "plaid", item[:source]
     assert_equal false, item[:is_transfer]
     assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
     assert_nil item[:counterpart_transaction_id]
     assert_nil item[:counterpart_account_id]
     assert_nil item[:counterpart_account_name]
@@ -50,13 +51,14 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     outflow.update!(kind: "cc_payment")
     inflow.update!(kind: "funds_movement")
 
-    [ [ outflow, inflow ], [ inflow, outflow ] ].each do |transaction, counterpart|
+    [ [ outflow, inflow, "outflow" ], [ inflow, outflow, "inflow" ] ].each do |transaction, counterpart, role|
       item = @function.call("search" => transaction.entry.name)[:transactions].find { |t| t[:id] == transaction.id }
 
       assert_equal transaction.kind, item[:kind]
       assert_equal transaction.entry.amount, item[:signed_amount]
       assert_equal true, item[:is_transfer]
       assert_equal transfer.id, item[:transfer_id]
+      assert_equal role, item[:transfer_role]
       assert_equal counterpart.id, item[:counterpart_transaction_id]
       assert_equal counterpart.entry.account_id, item[:counterpart_account_id]
       assert_equal counterpart.entry.account.name, item[:counterpart_account_name]
@@ -77,6 +79,7 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal false, item[:excluded]
     assert_nil item[:source]
     assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
     assert_nil item[:counterpart_transaction_id]
     assert_nil item[:counterpart_account_id]
     assert_nil item[:counterpart_account_name]
@@ -92,6 +95,7 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal "cc_payment", item[:kind]
     assert_equal true, item[:is_transfer]
     assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
     assert_nil item[:counterpart_transaction_id]
   end
 
@@ -106,6 +110,7 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
 
     assert_not_nil item
     assert_equal transfers(:one).id, item[:transfer_id]
+    assert_equal "outflow", item[:transfer_role]
     assert_nil item[:counterpart_transaction_id]
     assert_nil item[:counterpart_account_id]
     assert_nil item[:counterpart_account_name]

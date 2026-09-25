@@ -457,11 +457,30 @@ class McpControllerTest < ActionDispatch::IntegrationTest
       assert_response :ok
       result = JSON.parse(JSON.parse(response.body).dig("result", "content", 0, "text"))
       item = result.fetch("transactions").find { |t| t["id"] == entry.entryable_id }
-      assert_equal 25, item["amount"]
-      assert_equal(-25, item["signed_amount"])
+      assert_equal "25.0", item["amount"]
+      assert_equal "-25.0", item["signed_amount"]
       assert_equal "standard", item["kind"]
       assert_equal "plaid", item["source"]
       assert_nil item["transfer_id"]
+      assert_nil item["transfer_role"]
+    end
+  end
+
+  test "tools/call exposes both sides of a matched transfer" do
+    with_mcp_env do
+      [ [ transactions(:transfer_out), "outflow" ], [ transactions(:transfer_in), "inflow" ] ].each do |transaction, role|
+        post "/mcp", params: jsonrpc_request("tools/call", {
+          name: "get_transactions",
+          arguments: { search: transaction.entry.name }
+        }).to_json, headers: mcp_headers(@token)
+
+        assert_response :ok
+        result = JSON.parse(JSON.parse(response.body).dig("result", "content", 0, "text"))
+        item = result.fetch("transactions").find { |t| t["id"] == transaction.id }
+        assert_not_nil item
+        assert_equal transfers(:one).id, item["transfer_id"]
+        assert_equal role, item["transfer_role"]
+      end
     end
   end
 
