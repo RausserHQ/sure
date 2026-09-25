@@ -3,7 +3,7 @@
 require "pg"
 require "securerandom"
 
-host, user, password = ENV.fetch_values("TEST_POSTGRES_HOST", "TEST_POSTGRES_USER", "TEST_POSTGRES_PASSWORD")
+host, user, password = %w[TEST_POSTGRES_HOST TEST_POSTGRES_USER TEST_POSTGRES_PASSWORD].map { |name| ENV.fetch(name) }
 port = ENV.fetch("TEST_POSTGRES_PORT", "5432")
 
 # PostgreSQL identifiers are at most 63 bytes. Each invocation owns a new name.
