@@ -444,6 +444,27 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "tools/call exposes ledger fields through existing get_transactions" do
+    entry = transactions(:one).entry
+    entry.update!(amount: -25, source: "plaid")
+
+    with_mcp_env do
+      post "/mcp", params: jsonrpc_request("tools/call", {
+        name: "get_transactions",
+        arguments: { search: entry.name }
+      }).to_json, headers: mcp_headers(@token)
+
+      assert_response :ok
+      result = JSON.parse(JSON.parse(response.body).dig("result", "content", 0, "text"))
+      item = result.fetch("transactions").find { |t| t["id"] == entry.entryable_id }
+      assert_equal 25, item["amount"]
+      assert_equal(-25, item["signed_amount"])
+      assert_equal "standard", item["kind"]
+      assert_equal "plaid", item["source"]
+      assert_nil item["transfer_id"]
+    end
+  end
+
   test "tools/call executes get_balance_sheet" do
     with_mcp_env do
       post "/mcp", params: jsonrpc_request("tools/call", {
