@@ -3,9 +3,7 @@
 require "pg"
 require "securerandom"
 
-host = ENV.fetch("TEST_POSTGRES_HOST")
-user = ENV.fetch("TEST_POSTGRES_USER")
-password = ENV.fetch("TEST_POSTGRES_PASSWORD")
+host, user, password = ENV.fetch_values("TEST_POSTGRES_HOST", "TEST_POSTGRES_USER", "TEST_POSTGRES_PASSWORD")
 port = ENV.fetch("TEST_POSTGRES_PORT", "5432")
 
 # PostgreSQL identifiers are at most 63 bytes. Each invocation owns a new name.
@@ -37,9 +35,12 @@ begin
   raise "Schema load failed" unless system("bin/rails", "db:schema:load")
   raise "Test command failed" unless system(*ARGV)
 ensure
-  if created
-    admin.exec("DROP DATABASE #{database}")
-    puts "Dropped isolated test database #{database}"
+  begin
+    if created
+      admin.exec("DROP DATABASE #{database}")
+      puts "Dropped isolated test database #{database}"
+    end
+  ensure
+    admin.finish
   end
-  admin.finish
 end
