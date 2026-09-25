@@ -22,6 +22,100 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal @transaction.entry.notes, transaction[:notes]
   end
 
+  test "exposes signed stored amounts and ledger flags without changing the existing amount" do
+    entry = @transaction.entry
+    entry.update!(amount: -42, excluded: true, source: "plaid")
+    @transaction.update!(extra: { "plaid" => { "pending" => true } })
+
+    item = @function.call("search" => entry.name)[:transactions].find { |t| t[:id] == @transaction.id }
+
+    assert_equal 42, item[:amount]
+    assert_equal(-42, item[:signed_amount])
+    assert_equal "income", item[:classification]
+    assert_equal "standard", item[:kind]
+    assert_equal true, item[:excluded]
+    assert_equal true, item[:pending]
+    assert_equal "plaid", item[:source]
+    assert_equal false, item[:is_transfer]
+    assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
+    assert_nil item[:counterpart_transaction_id]
+    assert_nil item[:counterpart_account_id]
+    assert_nil item[:counterpart_account_name]
+  end
+
+  test "exposes matched payments and transfers from both sides" do
+    outflow = transactions(:transfer_out)
+    inflow = transactions(:transfer_in)
+    transfer = transfers(:one)
+    outflow.update!(kind: "cc_payment")
+    inflow.update!(kind: "funds_movement")
+
+    [ [ outflow, inflow, "outflow" ], [ inflow, outflow, "inflow" ] ].each do |transaction, counterpart, role|
+      item = @function.call("search" => transaction.entry.name)[:transactions].find { |t| t[:id] == transaction.id }
+
+      assert_equal transaction.kind, item[:kind]
+      assert_equal transaction.entry.amount, item[:signed_amount]
+      assert_equal true, item[:is_transfer]
+      assert_equal transfer.id, item[:transfer_id]
+      assert_equal role, item[:transfer_role]
+      assert_equal counterpart.id, item[:counterpart_transaction_id]
+      assert_equal counterpart.entry.account_id, item[:counterpart_account_id]
+      assert_equal counterpart.entry.account.name, item[:counterpart_account_name]
+    end
+  end
+
+  test "exposes loan payments and unmatched payment kinds without inventing a counterpart" do
+    entry = Entry.create!(account: accounts(:depository), name: "Unmatched loan payment",
+                          date: Date.current, amount: 75, currency: "USD",
+                          entryable: Transaction.new(kind: "loan_payment"))
+
+    item = @function.call("search" => entry.name)[:transactions].find { |t| t[:id] == entry.entryable.id }
+
+    assert_equal "loan_payment", item[:kind]
+    assert_equal 75, item[:signed_amount]
+    assert_equal true, item[:is_transfer]
+    assert_equal false, item[:pending]
+    assert_equal false, item[:excluded]
+    assert_nil item[:source]
+    assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
+    assert_nil item[:counterpart_transaction_id]
+    assert_nil item[:counterpart_account_id]
+    assert_nil item[:counterpart_account_name]
+  end
+
+  test "exposes an unmatched credit card payment without transfer metadata" do
+    entry = Entry.create!(account: accounts(:depository), name: "Unmatched card payment",
+                          date: Date.current, amount: 35, currency: "USD",
+                          entryable: Transaction.new(kind: "cc_payment"))
+
+    item = @function.call("search" => entry.name)[:transactions].find { |t| t[:id] == entry.entryable.id }
+
+    assert_equal "cc_payment", item[:kind]
+    assert_equal true, item[:is_transfer]
+    assert_nil item[:transfer_id]
+    assert_nil item[:transfer_role]
+    assert_nil item[:counterpart_transaction_id]
+  end
+
+  test "does not expose a counterpart account inaccessible to the user" do
+    outflow = transactions(:transfer_out)
+    outflow.update!(kind: "cc_payment")
+    accounts(:credit_card).account_shares.delete_all
+
+    item = Assistant::Function::GetTransactions.new(users(:family_member)).call(
+      "search" => outflow.entry.name
+    )[:transactions].find { |t| t[:id] == outflow.id }
+
+    assert_not_nil item
+    assert_equal transfers(:one).id, item[:transfer_id]
+    assert_equal "outflow", item[:transfer_role]
+    assert_nil item[:counterpart_transaction_id]
+    assert_nil item[:counterpart_account_id]
+    assert_nil item[:counterpart_account_name]
+  end
+
   test "excludes transactions from inaccessible accounts" do
     hidden_entry = Entry.create!(
       account: accounts(:investment),

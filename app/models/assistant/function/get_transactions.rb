@@ -34,6 +34,15 @@ class Assistant::Function::GetTransactions < Assistant::Function
         - `total_results`: The total number of results for the given filters
         - `total_income`: The total income for the given filters
         - `total_expenses`: The total expenses for the given filters
+
+        Each transaction retains the absolute `amount` for compatibility. `signed_amount`
+        is the raw stored Entry amount. Sure's transaction classification treats negative
+        as income/inflow and nonnegative as expense/outflow, but liability/debt direction
+        must not be inferred from sign alone. `kind`, `excluded`, `pending`, and `source`
+        reflect stored ledger metadata. `transfer_role` is `inflow` or `outflow` for a
+        matched transfer, and null when unmatched. Transfer and counterpart ids/account
+        details are null when unmatched; counterpart details are also null when the
+        account is inaccessible.
       INSTRUCTIONS
     end
   end
@@ -179,14 +188,21 @@ class Assistant::Function::GetTransactions < Assistant::Function
     ).offset(pagy.offset).limit(pagy.limit)
 
     totals = search.totals
+    accessible_account_ids = search.accessible_account_ids.to_set
 
     normalized_transactions = paginated_transactions.map do |txn|
       entry = txn.entry
+      transfer = txn.transfer
+      counterpart = if transfer
+        transfer.inflow_transaction_id == txn.id ? transfer.outflow_transaction : transfer.inflow_transaction
+      end
+      counterpart = nil unless counterpart&.entry && accessible_account_ids.include?(counterpart.entry.account_id)
       {
         id: txn.id,
         name: entry.name,
         date: entry.date,
         amount: entry.amount.abs,
+        signed_amount: entry.amount,
         currency: entry.currency,
         formatted_amount: entry.amount_money.abs.format,
         classification: entry.amount < 0 ? "income" : "expense",
@@ -195,7 +211,16 @@ class Assistant::Function::GetTransactions < Assistant::Function
         category: txn.category&.name,
         merchant: txn.merchant&.name,
         tags: txn.tags.map(&:name),
-        is_transfer: txn.transfer?
+        is_transfer: txn.transfer?,
+        kind: txn.kind,
+        excluded: entry.excluded?,
+        pending: txn.pending?,
+        source: entry.source,
+        transfer_id: transfer&.id,
+        transfer_role: transfer && (transfer.inflow_transaction_id == txn.id ? "inflow" : "outflow"),
+        counterpart_transaction_id: counterpart&.id,
+        counterpart_account_id: counterpart&.entry&.account_id,
+        counterpart_account_name: counterpart&.entry&.account&.name
       }
     end
 
