@@ -162,10 +162,11 @@ class SimplefinEntry::Processor
         return "loan_proceeds" if (loan_principal_advance? && !principal_reversal?) || (loan_principal_payment? && principal_reversal?)
         return "loan_payment" if (loan_principal_payment? && !principal_reversal?) || (loan_principal_advance? && principal_reversal?)
         return "standard" if payroll?
-        return "cc_payment" if amount.positive? && card_payment? && transaction_text.match?(/\bCARD\b/)
+        return "cc_payment" if amount.positive? && card_payment?
       elsif credit_card_account? && amount.negative?
         return "cc_payment" if card_payment?
         return "refund" if refund?
+        return "unclassified"
       end
 
       nil

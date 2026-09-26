@@ -329,11 +329,15 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
       id: "loan_card_payment",
       amount: "-400.00",
       payee: "Example Credit Card",
-      description: "CARD PAYMENT AUTOMATED PAYMENT"
+      description: "AMEX AUTOPAY"
     )
 
     assert_equal BigDecimal("400.00"), entry.amount
     assert_equal "cc_payment", entry.transaction.kind
+    totals = IncomeStatement.new(@family).totals(
+      transactions_scope: @family.transactions.where(id: entry.entryable_id), date_range: Date.current..Date.current
+    )
+    assert_equal Money.new(0, @family.currency), totals.expense_money
   end
 
   test "distinguishes SimpleFIN credit card refunds from payments" do
@@ -397,8 +401,17 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
     assert_equal "expense", refund.transaction.cashflow_classification
     assert_equal "cc_payment", payment.transaction.kind
     assert_equal "cc_payment", alternate.transaction.kind
-    assert_equal "standard", unknown.transaction.kind
-    assert_equal "income", unknown.transaction.cashflow_classification
+    assert_equal "unclassified", unknown.transaction.kind
+    assert_equal "unclassified", unknown.transaction.cashflow_classification
+    assert_not unknown.excluded?
+    unknown_totals = IncomeStatement.new(@family).totals(
+      transactions_scope: @family.transactions.where(id: unknown.entryable_id), date_range: Date.current..Date.current
+    )
+    assert_equal Money.new(0, @family.currency), unknown_totals.income_money
+    assert_equal Money.new(0, @family.currency), unknown_totals.expense_money
+    search_totals = Transaction::Search.new(@family, filters: { search: "CREDIT ADJUSTMENT" }).totals
+    assert_equal Money.new(0, @family.currency), search_totals.income_money
+    assert_equal Money.new(0, @family.currency), search_totals.expense_money
 
     [ 40, 41, 42, 43 ].each do |amount|
       use_account(accounts(:depository), account_type: "checking")
@@ -410,6 +423,11 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
       assert Transfer.exists?(inflow_transaction_id: credit.entryable_id)
       assert_equal "funds_movement", credit.transaction.reload.kind
     end
+    Transfer.find_by!(inflow_transaction_id: unknown.entryable_id).reject!
+    assert_equal "unclassified", unknown.transaction.reload.kind
+    assert_equal Money.new(0, @family.currency), IncomeStatement.new(@family).totals(
+      transactions_scope: @family.transactions.where(id: unknown.entryable_id), date_range: Date.current..Date.current
+    ).income_money
   end
 
   test "synthetic payroll remains income across matching and repeat import" do
@@ -419,6 +437,7 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
     savings = family.accounts.create!(name: "Payroll savings", currency: "USD", balance: 0, accountable: Depository.new)
     loan = family.accounts.create!(name: "Payroll loan", currency: "USD", balance: 10000, accountable: Loan.new)
     @family = family
+    assert Account::OpeningBalanceManager.new(loan).set_opening_balance(balance: 10000, date: Date.yesterday).success?
     payroll = [ [ checking, "checking", "pay_a", 120 ], [ savings, "savings", "pay_b", 180 ],
                 [ checking, "checking", "pay_c", 20 ], [ loan, "loan", "pay_d", 80 ] ]
     entries = payroll.map do |account, type, id, amount|
@@ -433,7 +452,9 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
       assert_equal 0, Transfer.where(inflow_transaction_id: entries.map(&:entryable_id)).count
       entries.each { |entry| assert_equal "standard", entry.transaction.reload.kind }
       assert_equal(-80, entries.last.reload.amount)
-      assert_equal(-80, loan.entries.where(id: entries.last.id).sum(:amount))
+      balance = Balance::ForwardCalculator.new(loan).calculate.last
+      assert_equal 80, balance.non_cash_inflows
+      assert_equal 9920, balance.balance
       scope = family.transactions.where(id: (entries + [ unrelated ]).map(&:entryable_id))
       totals = IncomeStatement.new(family).totals(transactions_scope: scope, date_range: Date.current..Date.current)
       assert_equal Money.new(400, family.currency), totals.income_money

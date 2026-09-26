@@ -165,7 +165,7 @@ class Transaction::Search
 
       case types.sort
       when [ "expense", "income", "transfer" ]
-        query.where.not(kind: "loan_proceeds")
+        query.where.not(kind: [ "loan_proceeds", "unclassified" ])
       when [ "transfer" ]
         query.where(kind: Transaction::TRANSFER_KINDS)
       when [ "expense" ]
@@ -176,10 +176,10 @@ class Transaction::Search
              .where.not(kind: Transaction::CASHFLOW_EXCLUDED_KINDS + [ "refund" ])
       when [ "expense", "transfer" ]
         query.where("entries.amount >= 0 OR transactions.kind = 'refund' OR transactions.kind IN (?)", Transaction::TRANSFER_KINDS)
-             .where.not(kind: "loan_proceeds")
+             .where.not(kind: [ "loan_proceeds", "unclassified" ])
       when [ "income", "transfer" ]
         query.where("entries.amount < 0 OR transactions.kind IN (?)", Transaction::TRANSFER_KINDS)
-             .where.not(kind: [ "refund", "loan_proceeds" ])
+             .where.not(kind: [ "refund", "loan_proceeds", "unclassified" ])
       when [ "expense", "income" ]
         query.where.not(kind: Transaction::CASHFLOW_EXCLUDED_KINDS)
       else
