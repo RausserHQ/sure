@@ -82,6 +82,50 @@ class Api::V1::TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "liability credits retain semantic classification in show and income expense filters" do
+    account = @family.accounts.create!(
+      name: "Synthetic Card", balance: 0, currency: "USD", accountable: CreditCard.new
+    )
+    cases = {
+      "unclassified" => -25, "refund" => -30, "loan_proceeds" => -35,
+      "funds_movement" => -40, "standard" => -45, "cc_payment" => 50,
+      "loan_payment" => 55, "one_time" => 60
+    }
+    transactions = cases.to_h do |kind, amount|
+      entry = account.entries.create!(
+        name: "Semantic #{kind}", date: Date.current, amount: amount,
+        currency: "USD", entryable: Transaction.new(kind: kind)
+      )
+      [ kind, entry.transaction ]
+    end
+
+    expected_classifications = {
+      "unclassified" => "unclassified", "refund" => "expense", "loan_proceeds" => "financing",
+      "funds_movement" => "transfer", "standard" => "income", "cc_payment" => "transfer",
+      "loan_payment" => "transfer", "one_time" => "expense"
+    }
+    transactions.each do |kind, transaction|
+      get api_v1_transaction_url(transaction), headers: api_headers(@api_key)
+      assert_response :success
+      assert_equal expected_classifications.fetch(kind), JSON.parse(response.body).fetch("classification"), kind
+    end
+
+    { "income" => [ "standard" ], "expense" => [ "refund", "one_time" ] }.each do |type, included|
+      get api_v1_transactions_url,
+          params: { account_id: account.id, type: type }, headers: api_headers(@api_key)
+      assert_response :success
+      assert_equal included.map { |kind| transactions.fetch(kind).id }.sort,
+                   JSON.parse(response.body).fetch("transactions").map { |row| row.fetch("id") }.sort
+    end
+
+    get api_v1_transactions_url, params: { account_id: account.id }, headers: api_headers(@api_key)
+    assert_response :success
+    actual_classifications = JSON.parse(response.body).fetch("transactions").to_h do |row|
+      [ row.fetch("name").delete_prefix("Semantic "), row.fetch("classification") ]
+    end
+    assert_equal expected_classifications, actual_classifications
+  end
+
   test "should filter transactions by account_id" do
     get api_v1_transactions_url, params: { account_id: @account.id }, headers: api_headers(@api_key)
     assert_response :success

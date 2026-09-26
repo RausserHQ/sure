@@ -5,7 +5,7 @@ class Transaction {
   final String date;
   final String amount;
   final String currency;
-  final String nature; // "expense" or "income"
+  final String nature; // income, expense, transfer, financing, or unclassified
   final String? notes;
   final String? categoryId;
   final String? categoryName;
@@ -60,7 +60,7 @@ class Transaction {
     if (json['classification'] != null) {
       final classification =
           json['classification']?.toString().toLowerCase() ?? '';
-      nature = classification == 'income' ? 'income' : 'expense';
+      nature = classification;
     } else if (json['nature'] != null) {
       nature = json['nature']?.toString() ?? 'expense';
     }

@@ -289,8 +289,10 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         case params[:type].downcase
         when "income"
           query = query.where("entries.amount < 0")
+                       .where.not(transactions: { kind: Transaction::CASHFLOW_EXCLUDED_KINDS + [ "refund" ] })
         when "expense"
-          query = query.where("entries.amount > 0")
+          query = query.where("entries.amount >= 0 OR transactions.kind = 'refund'")
+                       .where.not(transactions: { kind: Transaction::CASHFLOW_EXCLUDED_KINDS })
         end
       end
 

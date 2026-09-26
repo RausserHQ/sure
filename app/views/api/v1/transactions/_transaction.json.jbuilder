@@ -20,7 +20,7 @@ json.notes transaction.entry.notes
 json.external_id transaction.entry.external_id
 json.source transaction.entry.source
 json.user_modified transaction.entry.user_modified
-json.classification transaction.entry.classification
+json.classification transaction.cashflow_classification
 
 # Account information
 json.account do

@@ -1538,6 +1538,13 @@ components:
           type: boolean
         classification:
           type: string
+          enum:
+          - income
+          - expense
+          - transfer
+          - financing
+          - unclassified
+          description: Semantic cashflow classification; refunds are expense credits
         account:
           "$ref": "#/components/schemas/Account"
         category:
@@ -7474,7 +7481,7 @@ paths:
       - name: type
         in: query
         required: false
-        description: Filter by transaction type
+        description: Filter by semantic income or expense; excludes transfers, financing, and unclassified transactions
         schema:
           type: string
           enum:

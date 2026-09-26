@@ -835,7 +835,7 @@ RSpec.configure do |config|
               external_id: { type: :string, nullable: true },
               source: { type: :string, nullable: true },
               user_modified: { type: :boolean },
-              classification: { type: :string },
+              classification: { type: :string, enum: %w[income expense transfer financing unclassified], description: 'Semantic cashflow classification; refunds are expense credits' },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },
