@@ -112,6 +112,24 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal false, item[:is_transfer]
   end
 
+  test "reports unclassified credits without counting them as income or transfers" do
+    entry = Entry.create!(account: accounts(:credit_card), name: "Ambiguous card credit",
+                          date: Date.current, amount: -35, currency: "USD",
+                          entryable: Transaction.new(kind: "unclassified"))
+
+    result = @function.call("search" => entry.name)
+    item = result[:transactions].find { |transaction| transaction[:id] == entry.entryable.id }
+
+    assert_includes Assistant::Function::GetTransactions.description, "unclassified"
+    assert_equal "unclassified", item[:kind]
+    assert_equal "unclassified", item[:classification]
+    assert_equal false, item[:is_transfer]
+    assert_nil item[:transfer_id]
+    assert_equal "$0.00", result[:total_income]
+    assert_equal "$0.00", result[:total_expenses]
+    assert_empty @function.call("search" => entry.name, "types" => [ "income", "expense" ])[:transactions]
+  end
+
   test "classifies principal and proceeds independently of their stored signs" do
     payment = Entry.create!(account: accounts(:loan), name: "Principal payment",
                             date: Date.current, amount: -200, currency: "USD",

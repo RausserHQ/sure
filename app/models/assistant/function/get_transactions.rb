@@ -37,9 +37,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
 
         Each transaction retains the absolute `amount` for compatibility. `signed_amount`
         is the raw stored Entry amount. `classification` distinguishes income, expense,
-        transfer, and financing using both the signed amount and transaction kind;
-        liability/debt direction must not be inferred from sign alone. `kind`, `excluded`,
-        `pending`, and `source`
+        transfer, financing, and unclassified credits awaiting evidence or a matched
+        counterpart, using both the signed amount and transaction kind. Unclassified
+        credits are excluded from income and expense totals; liability/debt direction
+        must not be inferred from sign alone. `kind`, `excluded`, `pending`, and `source`
         reflect stored ledger metadata. `transfer_role` is `inflow` or `outflow` for a
         matched transfer, and null when unmatched. Transfer and counterpart ids/account
         details are null when unmatched; counterpart details are also null when the

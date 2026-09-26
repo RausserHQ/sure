@@ -430,6 +430,39 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
     ).income_money
   end
 
+  test "matched ambiguous SimpleFIN credit keeps its transfer through repeat import" do
+    use_account(accounts(:credit_card), account_type: "credit card")
+    credit = process_transaction(id: "repeat_credit", amount: "43", payee: "Unknown", description: "CREDIT ADJUSTMENT")
+    assert_equal "unclassified", credit.transaction.kind
+
+    use_account(accounts(:depository), account_type: "checking")
+    cash = process_transaction(id: "repeat_cash", amount: "-43", payee: "Bank", description: "Outgoing transfer")
+    Family::Syncer.new(@family).perform_post_sync
+    transfer = Transfer.find_by!(inflow_transaction: credit.transaction, outflow_transaction: cash.transaction)
+    assert_equal "unclassified", credit.transaction.reload.extra["transfer_original_kind"]
+
+    use_account(accounts(:credit_card), account_type: "credit card")
+    process_transaction(id: "repeat_credit", amount: "43", payee: "Updated payee", description: "CREDIT ADJUSTMENT")
+    Family::Syncer.new(@family).perform_post_sync
+
+    assert_equal "Updated payee", credit.transaction.reload.extra.dig("simplefin", "payee")
+    assert_equal transfer.id, credit.transaction.transfer.id
+    assert_equal "funds_movement", credit.transaction.kind
+    assert_equal "transfer", credit.transaction.cashflow_classification
+    assert credit.transaction.transfer?
+    assert_equal "unclassified", credit.transaction.extra["transfer_original_kind"]
+    assert_includes Transaction::Search.new(@family, filters: { types: [ "transfer" ] }).transactions_scope.pluck(:id), credit.entryable_id
+    item = Assistant::Function::GetTransactions.new(users(:family_admin)).call("search" => "CREDIT ADJUSTMENT")[:transactions].find { |txn| txn[:id] == credit.entryable_id }
+    assert_equal true, item[:is_transfer]
+    assert_equal transfer.id, item[:transfer_id]
+    assert_equal "standard", cash.transaction.reload.extra["transfer_original_kind"]
+    assert_not credit.user_modified?
+    assert_equal(-43, credit.reload.amount)
+
+    transfer.reject!
+    assert_equal "unclassified", credit.transaction.reload.kind
+  end
+
   test "synthetic payroll remains income across matching and repeat import" do
     family = families(:empty)
     @simplefin_account.update!(simplefin_item: SimplefinItem.create!(family: family, name: "Synthetic Bank", access_url: "https://example.com/synthetic"))
