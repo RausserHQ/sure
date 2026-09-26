@@ -43,13 +43,15 @@ module Family::AutoTransferMatchable
         next if used_transaction_ids.include?(match.inflow_transaction_id) ||
                used_transaction_ids.include?(match.outflow_transaction_id)
 
+        inflow_transaction = transactions_by_id.fetch(match.inflow_transaction_id)
+        outflow_transaction = transactions_by_id.fetch(match.outflow_transaction_id)
+        next if [ inflow_transaction, outflow_transaction ].any? { |transaction| simplefin_payroll?(transaction) }
+
         # Skip this candidate when the transfer for this exact pair was not created
         # (a concurrent sync claimed one of the transactions for a different pairing);
         # marking it matched here would leave a transaction matched with no Transfer.
         next unless find_or_create_transfer!(match)
 
-        inflow_transaction = transactions_by_id.fetch(match.inflow_transaction_id)
-        outflow_transaction = transactions_by_id.fetch(match.outflow_transaction_id)
         destination_account = inflow_transaction.entry.account
         transfer_kind = Transfer.kind_for_account(destination_account)
 
@@ -57,8 +59,8 @@ module Family::AutoTransferMatchable
         # A loan disbursement may legitimately match the deposit it funded. Keep
         # the liability-side financing semantic while marking the cash-side row
         # as an internal movement so the proceeds are not reported as income.
-        inflow_transaction.update!(kind: "funds_movement") unless inflow_transaction.loan_proceeds?
-        outflow_transaction.update!(kind: transfer_kind) unless outflow_transaction.loan_proceeds?
+        mark_transfer_kind!(inflow_transaction, "funds_movement") unless inflow_transaction.loan_proceeds?
+        mark_transfer_kind!(outflow_transaction, transfer_kind) unless outflow_transaction.loan_proceeds?
 
         # Assign Investment Contributions category for transfers to investment accounts
         if transfer_kind == "investment_contribution"
@@ -79,6 +81,15 @@ module Family::AutoTransferMatchable
   end
 
   private
+    def simplefin_payroll?(transaction)
+      metadata = transaction.extra&.dig("simplefin")
+      metadata && [ metadata["payee"], metadata["description"], metadata["memo"] ].compact.join(" ").match?(/\bPAYROLL\b/i)
+    end
+
+    def mark_transfer_kind!(transaction, kind)
+      transaction.update!(kind: kind, extra: transaction.extra.merge("transfer_original_kind" => transaction.kind))
+    end
+
     # Create the transfer for a matched candidate, tolerating a concurrent sync
     # that already inserted the same pair.
     #
