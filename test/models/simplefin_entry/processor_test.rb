@@ -279,4 +279,106 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
     sf = entry.transaction.extra.fetch("simplefin")
     assert_equal false, sf["pending"], "expected a non-numeric posted value to not be inferred as pending"
   end
+
+  test "normalizes SimpleFIN loan principal advances as new debt" do
+    use_account(accounts(:loan), account_type: "loan")
+
+    entry = process_transaction(
+      id: "loan_advance",
+      amount: "500.00",
+      payee: "Principal Advance",
+      description: "PRINCIPAL ADVANCE"
+    )
+
+    assert_equal BigDecimal("500.00"), entry.amount
+    assert_equal "loan_proceeds", entry.transaction.kind
+  end
+
+  test "normalizes SimpleFIN loan principal payments as debt reduction" do
+    use_account(accounts(:loan), account_type: "loan")
+
+    entry = process_transaction(
+      id: "loan_principal_payment",
+      amount: "-200.00",
+      payee: "Principal Payment",
+      description: "PRINCIPAL PAYMENT"
+    )
+
+    assert_equal BigDecimal("-200.00"), entry.amount
+    assert_equal "loan_payment", entry.transaction.kind
+  end
+
+  test "keeps payroll into a SimpleFIN loan as income that reduces debt" do
+    use_account(accounts(:loan), account_type: "loan")
+
+    entry = process_transaction(
+      id: "loan_payroll",
+      amount: "300.00",
+      payee: "Example Employer Payroll",
+      description: "EMPLOYER PAYROLL DIRECT DEPOSIT"
+    )
+
+    assert_equal BigDecimal("-300.00"), entry.amount
+    assert_equal "standard", entry.transaction.kind
+  end
+
+  test "classifies an unmatched card payment funded by a SimpleFIN loan" do
+    use_account(accounts(:loan), account_type: "loan")
+
+    entry = process_transaction(
+      id: "loan_card_payment",
+      amount: "-400.00",
+      payee: "Example Credit Card",
+      description: "CARD PAYMENT AUTOMATED PAYMENT"
+    )
+
+    assert_equal BigDecimal("400.00"), entry.amount
+    assert_equal "cc_payment", entry.transaction.kind
+  end
+
+  test "distinguishes SimpleFIN credit card refunds from payments" do
+    use_account(accounts(:credit_card), account_type: "credit card")
+
+    refund = process_transaction(
+      id: "card_refund",
+      amount: "25.00",
+      payee: "Example Merchant",
+      description: "PURCHASE CREDIT"
+    )
+    payment = process_transaction(
+      id: "card_payment",
+      amount: "100.00",
+      payee: "Payment",
+      description: "AUTOPAY PAYMENT - THANK YOU"
+    )
+
+    assert_equal BigDecimal("-25.00"), refund.amount
+    assert_equal "refund", refund.transaction.kind
+    assert_equal BigDecimal("-100.00"), payment.amount
+    assert_equal "cc_payment", payment.transaction.kind
+  end
+
+  private
+    def use_account(account, account_type:)
+      @account = account
+      @simplefin_account.update!(account: account, account_type: account_type)
+    end
+
+    def process_transaction(id:, amount:, payee:, description:)
+      SimplefinEntry::Processor.new(
+        {
+          id: id,
+          amount: amount,
+          currency: "USD",
+          payee: payee,
+          description: description,
+          posted: Date.current.to_s,
+          transacted_at: Date.current.to_s,
+          pending: false
+        },
+        simplefin_account: @simplefin_account
+      ).process
+
+      @account.entries.find_by!(external_id: "simplefin_#{id}", source: "simplefin")
+    end
 end

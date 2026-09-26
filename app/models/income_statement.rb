@@ -83,7 +83,14 @@ class IncomeStatement
       net = exp_total - inc_total
       category = exp_ct&.category || inc_ct&.category
 
-      if net > 0
+      # Refunds are expense credits even when they are categorized separately
+      # from the original purchase. Preserve a negative expense-category total
+      # on the expense side so it reduces aggregate spending instead of becoming
+      # artificial income.
+      if exp_total.negative?
+        raw_expense_categories << { category: category, total: exp_total }
+        raw_income_categories << { category: category, total: inc_total } if inc_total.positive?
+      elsif net > 0
         raw_expense_categories << { category: category, total: net }
       elsif net < 0
         raw_income_categories << { category: category, total: net.abs }
@@ -232,14 +239,14 @@ class IncomeStatement
     def family_stats(interval: "month")
       @family_stats ||= {}
       @family_stats[interval] ||= Rails.cache.fetch([
-        "income_statement", "family_stats", family.id, user&.id, interval, included_account_ids_hash, family.entries_cache_version
+        "income_statement", "family_stats", "v2", family.id, user&.id, interval, included_account_ids_hash, family.entries_cache_version
       ]) { FamilyStats.new(family, interval:, account_ids: included_account_ids).call }
     end
 
     def category_stats(interval: "month")
       @category_stats ||= {}
       @category_stats[interval] ||= Rails.cache.fetch([
-        "income_statement", "category_stats", family.id, user&.id, interval, included_account_ids_hash, family.entries_cache_version
+        "income_statement", "category_stats", "v2", family.id, user&.id, interval, included_account_ids_hash, family.entries_cache_version
       ]) { CategoryStats.new(family, interval:, account_ids: included_account_ids).call }
     end
 
@@ -259,7 +266,7 @@ class IncomeStatement
       sql_hash = Digest::MD5.hexdigest(transactions_scope.to_sql)
 
       Rails.cache.fetch([
-        "income_statement", "totals_query", "v2", family.id, user&.id, included_account_ids_hash, sql_hash, date_range.begin, date_range.end, family.entries_cache_version, family.accounts.maximum(:updated_at)&.to_i
+        "income_statement", "totals_query", "v3", family.id, user&.id, included_account_ids_hash, sql_hash, date_range.begin, date_range.end, family.entries_cache_version, family.accounts.maximum(:updated_at)&.to_i
       ]) { Totals.new(family, transactions_scope: transactions_scope, date_range: date_range, included_account_ids: included_account_ids).call }
     end
 

@@ -11,8 +11,8 @@ class BudgetCategoriesController < ApplicationController
 
   def show
     # The aggregate `Budget#actual_spending` already excludes transactions
-    # whose kind is in BUDGET_EXCLUDED_KINDS (funds_movement, one_time,
-    # cc_payment) via IncomeStatement. The drilldown list must apply the
+    # whose kind is in BUDGET_EXCLUDED_KINDS via IncomeStatement. The drilldown
+    # list must apply the
     # same filter, otherwise a matched transfer (post-#874 the matcher
     # correctly tags inflow as funds_movement and outflow per destination
     # account) shows under the Uncategorized card -- or any retained

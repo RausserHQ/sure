@@ -473,6 +473,23 @@ class Balance::ForwardCalculatorTest < ActiveSupport::TestCase
     )
   end
 
+  test "loan debt rises with positive advances and falls with negative credits" do
+    account = create_account_with_ledger(
+      account: { type: Loan, currency: "USD" },
+      entries: [
+        { type: "opening_anchor", date: 3.days.ago.to_date, balance: 20000 },
+        { type: "transaction", date: 2.days.ago.to_date, amount: 500 },
+        { type: "transaction", date: 1.day.ago.to_date, amount: -200 }
+      ]
+    )
+
+    calculated = Balance::ForwardCalculator.new(account).calculate
+
+    assert_equal 20000, calculated.first.balance
+    assert_equal 20500, calculated.second.balance
+    assert_equal 20300, calculated.third.balance
+  end
+
   test "non cash accounts can only use valuations and transactions will be recorded but ignored for balance calculation" do
     [ Property, Vehicle, OtherAsset, OtherLiability ].each do |account_type|
       account = create_account_with_ledger(

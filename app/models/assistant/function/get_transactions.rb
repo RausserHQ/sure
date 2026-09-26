@@ -36,9 +36,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
         - `total_expenses`: The total expenses for the given filters
 
         Each transaction retains the absolute `amount` for compatibility. `signed_amount`
-        is the raw stored Entry amount. Sure's transaction classification treats negative
-        as income/inflow and nonnegative as expense/outflow, but liability/debt direction
-        must not be inferred from sign alone. `kind`, `excluded`, `pending`, and `source`
+        is the raw stored Entry amount. `classification` distinguishes income, expense,
+        transfer, and financing using both the signed amount and transaction kind;
+        liability/debt direction must not be inferred from sign alone. `kind`, `excluded`,
+        `pending`, and `source`
         reflect stored ledger metadata. `transfer_role` is `inflow` or `outflow` for a
         matched transfer, and null when unmatched. Transfer and counterpart ids/account
         details are null when unmatched; counterpart details are also null when the
@@ -190,7 +191,7 @@ class Assistant::Function::GetTransactions < Assistant::Function
         signed_amount: entry.amount,
         currency: entry.currency,
         formatted_amount: entry.amount_money.abs.format,
-        classification: entry.amount < 0 ? "income" : "expense",
+        classification: txn.cashflow_classification,
         account: entry.account.name,
         notes: entry.notes,
         category: txn.category&.name,

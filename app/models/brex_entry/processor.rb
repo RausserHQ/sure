@@ -26,6 +26,7 @@ class BrexEntry::Processor
       date: date,
       name: name,
       source: "brex",
+      kind: transaction_kind,
       merchant: merchant,
       notes: notes,
       extra: extra
@@ -82,6 +83,12 @@ class BrexEntry::Processor
       note_parts << data[:type] if data[:type].present?
       note_parts << data[:expense_id] if data[:expense_id].present?
       note_parts.any? ? note_parts.join(" - ") : nil
+    end
+
+    def transaction_kind
+      return unless brex_account.account_kind == "card" && amount.negative?
+
+      data[:type] == "COLLECTION" ? "cc_payment" : "refund"
     end
 
     def merchant

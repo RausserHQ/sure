@@ -99,6 +99,33 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_nil item[:counterpart_transaction_id]
   end
 
+  test "classifies a refund as an expense credit despite its negative stored amount" do
+    entry = Entry.create!(account: accounts(:credit_card), name: "Merchant refund",
+                          date: Date.current, amount: -35, currency: "USD",
+                          entryable: Transaction.new(kind: "refund"))
+
+    item = @function.call("search" => entry.name)[:transactions].find { |t| t[:id] == entry.entryable.id }
+
+    assert_equal "refund", item[:kind]
+    assert_equal(-35, item[:signed_amount])
+    assert_equal "expense", item[:classification]
+    assert_equal false, item[:is_transfer]
+  end
+
+  test "classifies principal and proceeds independently of their stored signs" do
+    payment = Entry.create!(account: accounts(:loan), name: "Principal payment",
+                            date: Date.current, amount: -200, currency: "USD",
+                            entryable: Transaction.new(kind: "loan_payment"))
+    proceeds = Entry.create!(account: accounts(:loan), name: "Loan proceeds",
+                             date: Date.current, amount: 500, currency: "USD",
+                             entryable: Transaction.new(kind: "loan_proceeds"))
+
+    items = @function.call("account_ids" => [ accounts(:loan).id ])[:transactions].index_by { |item| item[:id] }
+
+    assert_equal "transfer", items.fetch(payment.entryable.id)[:classification]
+    assert_equal "financing", items.fetch(proceeds.entryable.id)[:classification]
+  end
+
   test "does not expose a counterpart account inaccessible to the user" do
     outflow = transactions(:transfer_out)
     outflow.update!(kind: "cc_payment")

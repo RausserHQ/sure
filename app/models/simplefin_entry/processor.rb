@@ -40,6 +40,7 @@ class SimplefinEntry::Processor
       date: date,
       name: name,
       source: "simplefin",
+      kind: transaction_kind,
       merchant: merchant,
       notes: notes,
       extra: extra_metadata
@@ -144,13 +145,57 @@ class SimplefinEntry::Processor
         BigDecimal("0")
       end
 
-      # SimpleFin uses banking convention (expenses negative, income positive)
-      # Maybe expects opposite convention (expenses positive, income negative)
-      # So we negate the amount to convert from SimpleFin to Maybe format
+      # SimpleFIN generally uses banking convention (expenses negative, income
+      # positive), the inverse of Sure. Principal-only loan rows are the exception:
+      # their provider sign describes the debt movement directly.
+      return parsed_amount.abs if loan_principal_advance?
+      return -parsed_amount.abs if loan_principal_payment?
+
       -parsed_amount
     rescue ArgumentError => e
       Rails.logger.error "Failed to parse SimpleFin transaction amount: #{data[:amount].inspect} - #{e.message}"
       raise
+    end
+
+    def transaction_kind
+      if loan_account?
+        return "loan_proceeds" if loan_principal_advance?
+        return "loan_payment" if loan_principal_payment?
+        return "standard" if payroll?
+        return "cc_payment" if card_payment?
+      elsif credit_card_account? && amount.negative?
+        return card_payment? ? "cc_payment" : "refund"
+      end
+
+      nil
+    end
+
+    def loan_account?
+      account.accountable_type == "Loan"
+    end
+
+    def credit_card_account?
+      account.accountable_type == "CreditCard"
+    end
+
+    def transaction_text
+      @transaction_text ||= [ data[:payee], data[:description], data[:memo] ].compact.join(" ").upcase
+    end
+
+    def loan_principal_advance?
+      loan_account? && transaction_text.match?(/\bPRINCIPAL\s+ADVANCE\b/)
+    end
+
+    def loan_principal_payment?
+      loan_account? && transaction_text.match?(/\bPRINCIPAL\s+PAYMENT\b/)
+    end
+
+    def payroll?
+      transaction_text.match?(/\bPAYROLL\b/)
+    end
+
+    def card_payment?
+      transaction_text.match?(/\b(?:AUTOPAY|AUTO-PMT|PAYMENT)\b/)
     end
 
     def currency

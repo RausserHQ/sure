@@ -217,17 +217,51 @@ class IncomeStatementTest < ActiveSupport::TestCase
     assert_equal Money.new(900, @family.currency), totals.expense_money
   end
 
-  test "includes loan payments as expenses in income statement" do
+  test "excludes loan principal payments from income statement" do
     # Create a loan payment transaction
     create_transaction(account: @checking_account, amount: 1000, category: nil, kind: "loan_payment")
 
     income_statement = IncomeStatement.new(@family)
     totals = income_statement.totals(date_range: Period.last_30_days.date_range)
 
-    # CONTINUES TO WORK: Includes loan payments as expenses (loan_payment not in exclusion list)
-    assert_equal 5, totals.transactions_count
+    assert_equal 4, totals.transactions_count
     assert_equal Money.new(1000, @family.currency), totals.income_money
-    assert_equal Money.new(1900, @family.currency), totals.expense_money # 900 + 1000
+    assert_equal Money.new(900, @family.currency), totals.expense_money
+  end
+
+  test "excludes loan principal and proceeds while retaining payroll and interest" do
+    create_transaction(account: @loan_account, amount: 500, kind: "loan_proceeds")
+    create_transaction(account: @loan_account, amount: -200, kind: "loan_payment")
+    create_transaction(account: @loan_account, amount: -300, category: @income_category, kind: "standard")
+    create_transaction(account: @loan_account, amount: 40, category: @groceries_category, kind: "standard")
+
+    totals = IncomeStatement.new(@family).totals(date_range: Period.last_30_days.date_range)
+
+    assert_equal Money.new(1300, @family.currency), totals.income_money
+    assert_equal Money.new(940, @family.currency), totals.expense_money
+    assert_equal 6, totals.transactions_count
+  end
+
+  test "nets credit card refunds against spending instead of reporting income" do
+    create_transaction(account: @credit_card_account, amount: -125, category: nil, kind: "refund")
+
+    totals = IncomeStatement.new(@family).totals(date_range: Period.last_30_days.date_range)
+
+    assert_equal Money.new(1000, @family.currency), totals.income_money
+    assert_equal Money.new(775, @family.currency), totals.expense_money
+    assert_equal 5, totals.transactions_count
+  end
+
+  test "keeps a separately categorized refund as an expense credit" do
+    refund_category = @family.categories.create!(name: "Refunds")
+    create_transaction(account: @credit_card_account, amount: -125, category: refund_category, kind: "refund")
+
+    net = IncomeStatement.new(@family).net_category_totals(period: Period.last_30_days)
+
+    assert_equal 775, net.total_net_expense
+    assert_equal 1000, net.total_net_income
+    assert_equal(-125, net.net_expense_categories.find { |ct| ct.category.id == refund_category.id }.total)
+    assert_nil net.net_income_categories.find { |ct| ct.category.id == refund_category.id }
   end
 
   test "excludes one-time transactions from income statement calculations" do
@@ -745,5 +779,30 @@ class IncomeStatementTest < ActiveSupport::TestCase
     income_statement.expense_totals(period: period)
 
     assert_equal 1, totals_query_calls
+  end
+
+  test "versions caches when income statement semantics change" do
+    cache = Class.new do
+      attr_reader :keys
+
+      def initialize
+        @keys = []
+      end
+
+      def fetch(key)
+        @keys << key
+        yield
+      end
+    end.new
+    Rails.stubs(:cache).returns(cache)
+
+    statement = IncomeStatement.new(@family)
+    statement.totals(date_range: Period.last_30_days.date_range)
+    statement.median_expense(interval: "month")
+    statement.median_expense(interval: "month", category: @groceries_category)
+
+    assert cache.keys.any? { |key| key.first(3) == [ "income_statement", "totals_query", "v3" ] }
+    assert cache.keys.any? { |key| key.first(3) == [ "income_statement", "family_stats", "v2" ] }
+    assert cache.keys.any? { |key| key.first(3) == [ "income_statement", "category_stats", "v2" ] }
   end
 end

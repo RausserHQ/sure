@@ -1,6 +1,8 @@
 require "test_helper"
 
 class Family::SyncerTest < ActiveSupport::TestCase
+  include EntriesTestHelper
+
   setup do
     @family = families(:dylan_family)
   end
@@ -86,6 +88,52 @@ class Family::SyncerTest < ActiveSupport::TestCase
 
     syncer.perform_sync(family_sync)
     syncer.perform_post_sync
+  end
+
+  test "post-sync matching preserves a refund that collides by amount" do
+    refund = create_transaction(
+      date: Date.current,
+      account: accounts(:credit_card),
+      amount: -25,
+      kind: "refund"
+    )
+    charge = create_transaction(
+      date: Date.current,
+      account: accounts(:depository),
+      amount: 25
+    )
+    @family.rules.stubs(:where).with(active: true).returns([])
+
+    assert_no_difference -> { Transfer.count } do
+      Family::Syncer.new(@family).perform_post_sync
+    end
+
+    assert_equal "refund", refund.reload.entryable.kind
+    assert_equal "standard", charge.reload.entryable.kind
+  end
+
+  test "post-sync matching preserves loan proceeds and excludes the cash receipt" do
+    proceeds = create_transaction(
+      date: Date.current,
+      account: accounts(:loan),
+      amount: 500,
+      kind: "loan_proceeds"
+    )
+    deposit = create_transaction(
+      date: Date.current,
+      account: accounts(:depository),
+      amount: -500
+    )
+    @family.rules.stubs(:where).with(active: true).returns([])
+
+    assert_difference -> { Transfer.count } => 1 do
+      Family::Syncer.new(@family).perform_post_sync
+    end
+
+    assert_equal "loan_proceeds", proceeds.reload.entryable.kind
+    assert_equal "funds_movement", deposit.reload.entryable.kind
+    assert_equal "financing", proceeds.entryable.cashflow_classification
+    assert_equal "transfer", deposit.entryable.cashflow_classification
   end
 
   private

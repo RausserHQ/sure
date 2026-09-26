@@ -69,7 +69,7 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_equal "funds_movement", entry.transaction.kind
   end
 
-  test "account-type kind takes precedence over an explicit provider kind" do
+  test "explicit provider kind takes precedence over account-sign inference" do
     loan_adapter = Account::ProviderImportAdapter.new(accounts(:loan))
 
     entry = loan_adapter.import_transaction(
@@ -82,8 +82,38 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
       kind: "funds_movement"
     )
 
-    assert_equal "loan_payment", entry.transaction.kind,
-                 "a repayment on a Loan account must stay loan_payment, not the provider's funds_movement"
+    assert_equal "funds_movement", entry.transaction.kind
+  end
+
+  test "keeps legacy credit card payment fallback when provider kind is absent" do
+    card_adapter = Account::ProviderImportAdapter.new(accounts(:credit_card))
+
+    entry = card_adapter.import_transaction(
+      external_id: "plaid_card_payment_1",
+      amount: -200.00,
+      currency: "USD",
+      date: Date.today,
+      name: "Card payment",
+      source: "plaid"
+    )
+
+    assert_equal "cc_payment", entry.transaction.kind
+  end
+
+  test "explicit refund kind overrides legacy credit card payment fallback" do
+    card_adapter = Account::ProviderImportAdapter.new(accounts(:credit_card))
+
+    entry = card_adapter.import_transaction(
+      external_id: "simplefin_card_refund_1",
+      amount: -25.00,
+      currency: "USD",
+      date: Date.today,
+      name: "Merchant refund",
+      source: "simplefin",
+      kind: "refund"
+    )
+
+    assert_equal "refund", entry.transaction.kind
   end
 
   test "updates existing transaction instead of creating duplicate" do
