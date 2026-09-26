@@ -1,5 +1,19 @@
 # Repository guidance
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `RausserHQ/sure`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.
+
 ## Working in the repository
 
 - Read [architecture and conventions](docs/llm-guides/architecture.md) before changing code, and the relevant [task guides](docs/llm-guides/README.md).
