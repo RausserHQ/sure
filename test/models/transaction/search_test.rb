@@ -93,6 +93,44 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_not_includes non_transfer_ids, payment_entry.entryable.id
   end
 
+  test "search treats refunds as expense credits" do
+    purchase = create_transaction(account: @credit_card_account, amount: 100, kind: "standard")
+    refund = create_transaction(account: @credit_card_account, amount: -25, kind: "refund")
+
+    search = Transaction::Search.new(@family)
+    assert_equal Money.new(75, @family.currency), search.totals.expense_money
+    assert_equal Money.new(0, @family.currency), search.totals.income_money
+
+    expense_ids = Transaction::Search.new(@family, filters: { types: [ "expense" ] }).transactions_scope.pluck(:id)
+    income_ids = Transaction::Search.new(@family, filters: { types: [ "income" ] }).transactions_scope.pluck(:id)
+
+    assert_includes expense_ids, purchase.entryable.id
+    assert_includes expense_ids, refund.entryable.id
+    assert_not_includes income_ids, refund.entryable.id
+  end
+
+  test "search excludes new borrowing from income and expense totals" do
+    proceeds = create_transaction(account: @loan_account, amount: 500, kind: "loan_proceeds")
+
+    search = Transaction::Search.new(@family)
+    assert_equal Money.new(0, @family.currency), search.totals.expense_money
+    assert_equal Money.new(0, @family.currency), search.totals.income_money
+
+    result_ids = Transaction::Search.new(@family, filters: { types: [ "expense", "income" ] }).transactions_scope.pluck(:id)
+    assert_not_includes result_ids, proceeds.entryable.id
+  end
+
+  test "search excludes new borrowing when all cash flow types are selected" do
+    proceeds = create_transaction(account: @loan_account, amount: 500, kind: "loan_proceeds")
+
+    result_ids = Transaction::Search.new(
+      @family,
+      filters: { types: [ "income", "expense", "transfer" ] }
+    ).transactions_scope.pluck(:id)
+
+    assert_not_includes result_ids, proceeds.entryable.id
+  end
+
   test "search category filter handles uncategorized transactions correctly with kind filtering" do
     # Create uncategorized transactions of different kinds
     uncategorized_standard = create_transaction(

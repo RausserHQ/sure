@@ -174,6 +174,33 @@ class Family::AutoTransferMatchableTest < ActiveSupport::TestCase
     end
   end
 
+  test "does not auto-match investment income to an equal card charge" do
+    dividend = create_transaction(date: 3.days.ago.to_date, account: accounts(:investment), amount: -4)
+    dividend.entryable.update!(investment_activity_label: "Dividend")
+    charge = create_transaction(date: Date.current, account: @credit_card, amount: 4)
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+
+    assert_nil Transfer.find_by(
+      inflow_transaction_id: dividend.entryable_id,
+      outflow_transaction_id: charge.entryable_id
+    )
+  end
+
+  test "does not auto-match refunds" do
+    refund = create_transaction(date: Date.current, account: @credit_card, amount: -25, kind: "refund")
+    refund_collision = create_transaction(date: Date.current, account: @depository, amount: 25)
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+
+    assert_equal "refund", refund.reload.entryable.kind
+    assert_equal "standard", refund_collision.reload.entryable.kind
+  end
+
   test "does not consider inactive accounts when matching transfers" do
     @depository.disable!
 

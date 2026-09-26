@@ -197,10 +197,8 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 999.0, other_budget_category.reload.budgeted_spending.to_f
   end
 
-  test "show drilldown still lists loan_payment transfers (intentionally budget-tracked)" do
-    # loan_payment is NOT in BUDGET_EXCLUDED_KINDS. The drilldown should
-    # keep showing loan_payment transfers so the user can see what's
-    # under Uncategorized (or whichever category they manually set).
+  test "show drilldown excludes loan principal transfers" do
+    # Principal repayment reduces a liability; it is not household consumption.
     create_transaction(
       date: @budget.start_date,
       account: accounts(:depository),
@@ -217,8 +215,10 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
 
     get budget_budget_category_path(@budget, BudgetCategory.uncategorized.id)
     assert_response :success
-    assert_includes @response.body, "MORTGAGE_REPRO_OUTFLOW",
-      "loan_payment outflow remains visible (kind is not BUDGET_EXCLUDED)"
+    refute_includes @response.body, "MORTGAGE_REPRO_OUTFLOW",
+      "loan_payment outflow must not appear as budget spending"
+    refute_includes @response.body, "MORTGAGE_REPRO_INFLOW",
+      "matched loan inflow must not appear as budget spending"
   end
 
   # --- move (Lot A2) ---

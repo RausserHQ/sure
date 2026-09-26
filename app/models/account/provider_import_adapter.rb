@@ -208,13 +208,10 @@ class Account::ProviderImportAdapter
         detected_label = detect_activity_label(name, amount)
       end
 
-      # Determine the transaction kind. Activity-label and account-type classification
-      # take precedence; an explicit kind supplied by the provider is used as a fallback
-      # for the standard case. A provider such as Up flags internal transfers and
-      # round-ups (via relationships.transferAccount) and passes funds_movement, but a
-      # repayment imported onto a linked Loan/CreditCard account must stay
-      # loan_payment/cc_payment (a budgeted expense) rather than being reclassified, so
-      # the account-type branches below win over the provider hint.
+      # Determine the transaction kind. Investment activity labels take precedence.
+      # Otherwise, a provider processor's explicit semantic classification wins over
+      # account-sign heuristics. This is required for liability credits such as payroll,
+      # which reduce debt while remaining income.
       auto_kind = nil
       auto_category = nil
       if Transaction::INTERNAL_MOVEMENT_LABELS.include?(detected_label)
@@ -222,12 +219,16 @@ class Account::ProviderImportAdapter
       elsif detected_label == "Contribution"
         auto_kind = "investment_contribution"
         auto_category = account.family.investment_contributions_category
+      elsif kind.present?
+        auto_kind = kind
       elsif account.accountable_type == "Loan" && amount.negative?
         auto_kind = "loan_payment"
-      elsif account.accountable_type == "CreditCard" && amount.negative?
+      elsif account.accountable_type == "CreditCard" && amount.negative? && !%w[simplefin brex].include?(source)
+        # Keep the legacy fallback for providers that do not yet supply a semantic
+        # kind. SimpleFIN and Brex distinguish payments from refunds explicitly;
+        # other providers retain the v0.7.4 compatibility behavior.
         auto_kind = "cc_payment"
       end
-      auto_kind ||= kind.presence
 
       # Set investment activity label, kind, and category if detected
       if entry.entryable.is_a?(Transaction)

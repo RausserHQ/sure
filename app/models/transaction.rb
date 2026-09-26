@@ -71,7 +71,9 @@ class Transaction < ApplicationRecord
     standard: "standard", # A regular transaction, included in budget analytics
     funds_movement: "funds_movement", # Movement of funds between accounts, excluded from budget analytics
     cc_payment: "cc_payment", # A CC payment, excluded from budget analytics (CC payments offset the sum of expense transactions)
-    loan_payment: "loan_payment", # A payment to a Loan account, treated as an expense in budgets
+    loan_payment: "loan_payment", # Loan principal repayment, excluded from income/expense analytics
+    loan_proceeds: "loan_proceeds", # New borrowing, excluded from income/expense analytics
+    refund: "refund", # A merchant credit that reduces expenses rather than creating income
     one_time: "one_time", # A one-time expense/income, excluded from budget analytics
     investment_contribution: "investment_contribution" # Transfer to investment/crypto account, treated as an expense in budgets
   }
@@ -80,10 +82,14 @@ class Transaction < ApplicationRecord
   # Used for search filters, rule conditions, and UI display.
   TRANSFER_KINDS = %w[funds_movement cc_payment loan_payment investment_contribution].freeze
 
+  # Kinds that do not belong in income/expense search totals. Loan proceeds are
+  # financing, but deliberately are not marked as an internal transfer.
+  CASHFLOW_EXCLUDED_KINDS = (TRANSFER_KINDS + %w[loan_proceeds]).freeze
+
   # Kinds excluded from budget/income-statement analytics.
-  # loan_payment and investment_contribution are intentionally NOT here —
-  # they represent real cash outflow from a budgeting perspective.
-  BUDGET_EXCLUDED_KINDS = %w[funds_movement one_time cc_payment].freeze
+  # Principal movements change debt but are neither income nor consumption.
+  # Investment contributions remain visible as cash outflow by design.
+  BUDGET_EXCLUDED_KINDS = %w[funds_movement one_time cc_payment loan_payment loan_proceeds].freeze
 
   # All valid investment activity labels (for UI dropdown)
   ACTIVITY_LABELS = [
@@ -132,6 +138,14 @@ class Transaction < ApplicationRecord
   # Overarching grouping method for all transfer-type transactions
   def transfer?
     TRANSFER_KINDS.include?(kind)
+  end
+
+  def cashflow_classification
+    return "expense" if refund?
+    return "financing" if loan_proceeds?
+    return "transfer" if transfer?
+
+    entry.amount.negative? ? "income" : "expense"
   end
 
   def set_category!(category)

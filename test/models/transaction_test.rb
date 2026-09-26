@@ -143,8 +143,14 @@ class TransactionTest < ActiveSupport::TestCase
     end
   end
 
+  test "cashflow classification uses transaction semantics before sign" do
+    assert_equal "expense", Transaction.new(kind: "refund", entry: Entry.new(amount: -25)).cashflow_classification
+    assert_equal "transfer", Transaction.new(kind: "loan_payment", entry: Entry.new(amount: -200)).cashflow_classification
+    assert_equal "financing", Transaction.new(kind: "loan_proceeds", entry: Entry.new(amount: 500)).cashflow_classification
+  end
+
   test "all transaction kinds are valid" do
-    valid_kinds = %w[standard funds_movement cc_payment loan_payment one_time investment_contribution]
+    valid_kinds = %w[standard funds_movement cc_payment loan_payment loan_proceeds refund one_time investment_contribution]
 
     valid_kinds.each do |kind|
       transaction = Transaction.new(kind: kind)
