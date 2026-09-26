@@ -28,6 +28,25 @@ void main() {
       expect(transaction.tagNames, ['Work', 'Travel']);
     });
 
+    test('preserves semantic API classifications without treating them as expense', () {
+      for (final classification in [
+        'income', 'expense', 'unclassified', 'transfer', 'financing'
+      ]) {
+        final transaction = Transaction.fromJson({
+          'account_id': 'acct_1',
+          'name': 'Synthetic credit',
+          'date': '2026-06-01',
+          'amount': r'$25.00',
+          'currency': 'USD',
+          'classification': classification,
+        });
+        expect(transaction.nature, classification);
+        expect(transaction.isIncome, classification == 'income');
+        expect(transaction.isExpense, classification == 'expense');
+        expect(Transaction.fromJson(transaction.toJson()).nature, classification);
+      }
+    });
+
     test('round-trips merchant and tag metadata through offline maps', () {
       final offlineTransaction = OfflineTransaction.fromTransaction(
         Transaction(

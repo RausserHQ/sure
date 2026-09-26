@@ -108,7 +108,9 @@ class Transfer < ApplicationRecord
         next if transaction.nil?
         next unless Transaction.exists?(transaction.id)
         begin
-          transaction.update!(kind: "standard")
+          original_kind = transaction.extra&.dig("transfer_original_kind")
+          transaction.update!(kind: original_kind || (transaction.kind.in?(Transaction::TRANSFER_KINDS) ? "standard" : transaction.kind),
+                              extra: (transaction.extra || {}).except("transfer_original_kind"))
         rescue ActiveRecord::RecordNotFound
         rescue NoMethodError
           next

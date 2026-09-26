@@ -74,6 +74,7 @@ class Transaction < ApplicationRecord
     loan_payment: "loan_payment", # Loan principal repayment, excluded from income/expense analytics
     loan_proceeds: "loan_proceeds", # New borrowing, excluded from income/expense analytics
     refund: "refund", # A merchant credit that reduces expenses rather than creating income
+    unclassified: "unclassified", # Liability credit awaiting evidence or a matched counterpart
     one_time: "one_time", # A one-time expense/income, excluded from budget analytics
     investment_contribution: "investment_contribution" # Transfer to investment/crypto account, treated as an expense in budgets
   }
@@ -84,12 +85,12 @@ class Transaction < ApplicationRecord
 
   # Kinds that do not belong in income/expense search totals. Loan proceeds are
   # financing, but deliberately are not marked as an internal transfer.
-  CASHFLOW_EXCLUDED_KINDS = (TRANSFER_KINDS + %w[loan_proceeds]).freeze
+  CASHFLOW_EXCLUDED_KINDS = (TRANSFER_KINDS + %w[loan_proceeds unclassified]).freeze
 
   # Kinds excluded from budget/income-statement analytics.
   # Principal movements change debt but are neither income nor consumption.
   # Investment contributions remain visible as cash outflow by design.
-  BUDGET_EXCLUDED_KINDS = %w[funds_movement one_time cc_payment loan_payment loan_proceeds].freeze
+  BUDGET_EXCLUDED_KINDS = %w[funds_movement one_time cc_payment loan_payment loan_proceeds unclassified].freeze
 
   # All valid investment activity labels (for UI dropdown)
   ACTIVITY_LABELS = [
@@ -143,6 +144,7 @@ class Transaction < ApplicationRecord
   def cashflow_classification
     return "expense" if refund?
     return "financing" if loan_proceeds?
+    return "unclassified" if unclassified?
     return "transfer" if transfer?
 
     entry.amount.negative? ? "income" : "expense"

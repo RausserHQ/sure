@@ -10,6 +10,36 @@ class Family::AutoTransferMatchableTest < ActiveSupport::TestCase
     @loan = accounts(:loan)
   end
 
+  test "rejecting a matched loan advance restores only transfer-created kinds" do
+    advance = create_transaction(date: Date.current, account: @loan, amount: 500, kind: "loan_proceeds")
+    deposit = create_transaction(date: Date.current, account: @depository, amount: -500)
+
+    @family.auto_match_transfers!
+    transfer = Transfer.find_by!(inflow_transaction: deposit.transaction, outflow_transaction: advance.transaction)
+    assert_equal "loan_proceeds", advance.transaction.reload.kind
+    assert_equal "funds_movement", deposit.transaction.reload.kind
+
+    transfer.reject!
+    assert_equal "loan_proceeds", advance.transaction.reload.kind
+    assert_equal "standard", deposit.transaction.reload.kind
+    assert_equal "financing", advance.transaction.cashflow_classification
+    totals = IncomeStatement.new(@family).totals(transactions_scope: @family.transactions.where(id: [ advance.entryable_id, deposit.entryable_id ]), date_range: Date.current..Date.current)
+    assert_equal Money.new(500, @family.currency), totals.income_money
+    assert_equal Money.new(0, @family.currency), totals.expense_money
+    @family.auto_match_transfers!
+    assert_not Transfer.exists?(inflow_transaction: deposit.transaction, outflow_transaction: advance.transaction)
+  end
+
+  test "unmatching preserves an independently classified refund" do
+    credit = create_transaction(date: Date.current, account: @credit_card, amount: -25, kind: "refund")
+    debit = create_transaction(date: Date.current, account: @depository, amount: 25)
+    transfer = Transfer.create!(inflow_transaction: credit.transaction, outflow_transaction: debit.transaction)
+
+    transfer.destroy!
+    assert_equal "refund", credit.transaction.reload.kind
+    assert_equal "expense", credit.transaction.cashflow_classification
+  end
+
   test "auto-matches transfers" do
     outflow_entry = create_transaction(date: 1.day.ago.to_date, account: @depository, amount: 500)
     inflow_entry = create_transaction(date: Date.current, account: @credit_card, amount: -500)

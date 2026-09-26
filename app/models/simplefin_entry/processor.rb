@@ -148,8 +148,8 @@ class SimplefinEntry::Processor
       # SimpleFIN generally uses banking convention (expenses negative, income
       # positive), the inverse of Sure. Principal-only loan rows are the exception:
       # their provider sign describes the debt movement directly.
-      return parsed_amount.abs if loan_principal_advance?
-      return -parsed_amount.abs if loan_principal_payment?
+      return (principal_reversal? ? -1 : 1) * parsed_amount.abs if loan_principal_advance?
+      return (principal_reversal? ? 1 : -1) * parsed_amount.abs if loan_principal_payment?
 
       -parsed_amount
     rescue ArgumentError => e
@@ -159,12 +159,14 @@ class SimplefinEntry::Processor
 
     def transaction_kind
       if loan_account?
-        return "loan_proceeds" if loan_principal_advance?
-        return "loan_payment" if loan_principal_payment?
+        return "loan_proceeds" if (loan_principal_advance? && !principal_reversal?) || (loan_principal_payment? && principal_reversal?)
+        return "loan_payment" if (loan_principal_payment? && !principal_reversal?) || (loan_principal_advance? && principal_reversal?)
         return "standard" if payroll?
-        return "cc_payment" if card_payment?
+        return "cc_payment" if amount.positive? && card_payment?
       elsif credit_card_account? && amount.negative?
-        return card_payment? ? "cc_payment" : "refund"
+        return "cc_payment" if card_payment?
+        return "refund" if refund?
+        return "unclassified"
       end
 
       nil
@@ -190,12 +192,20 @@ class SimplefinEntry::Processor
       loan_account? && transaction_text.match?(/\bPRINCIPAL\s+PAYMENT\b/)
     end
 
+    def principal_reversal?
+      transaction_text.match?(/\bREVERS(?:AL|ED)\b/)
+    end
+
+    def refund?
+      transaction_text.match?(/\b(?:REFUND|RETURN|PURCHASE CREDIT|MERCHANT CREDIT)\b/)
+    end
+
     def payroll?
       transaction_text.match?(/\bPAYROLL\b/)
     end
 
     def card_payment?
-      transaction_text.match?(/\b(?:AUTOPAY|AUTO-PMT|PAYMENT)\b/)
+      transaction_text.match?(/\b(?:AUTOPAY|AUTO-PMT|CARD PAYMENT|CREDIT CARD PAYMENT|TRANSFER FROM (?:CHECKING|SAVINGS)|THANK YOU FOR YOUR PAYMENT)\b/)
     end
 
     def currency

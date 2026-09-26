@@ -112,7 +112,7 @@ RSpec.describe 'API V1 Transactions', type: :request do
       parameter name: :max_amount, in: :query, type: :number, required: false,
                 description: 'Filter by maximum amount'
       parameter name: :type, in: :query, required: false,
-                description: 'Filter by transaction type',
+                description: 'Filter by semantic income or expense; excludes transfers, financing, and unclassified transactions',
                 schema: { type: :string, enum: %w[income expense] }
       parameter name: :search, in: :query, type: :string, required: false,
                 description: 'Search by name, notes, or merchant name'
