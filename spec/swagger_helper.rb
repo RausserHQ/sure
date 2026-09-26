@@ -824,11 +824,13 @@ RSpec.configure do |config|
           },
           Transaction: {
             type: :object,
-            required: %w[id date amount currency name classification account tags created_at updated_at],
+            required: %w[id date amount amount_cents signed_amount_cents currency name classification account tags created_at updated_at],
             properties: {
               id: { type: :string, format: :uuid },
               date: { type: :string, format: :date },
               amount: { type: :string },
+              amount_cents: { type: :integer, minimum: 0, description: 'Absolute amount in currency minor units' },
+              signed_amount_cents: { type: :integer, description: 'Classification-oriented amount in currency minor units: positive only for income, negative for all non-income (including refunds, unclassified credits, transfers, and financing). Zero stays zero. Its magnitude equals amount_cents; do not use its sign to calculate net expense or infer ledger direction.' },
               currency: { type: :string },
               name: { type: :string },
               notes: { type: :string, nullable: true },

@@ -107,7 +107,12 @@ class Api::V1::TransactionsControllerTest < ActionDispatch::IntegrationTest
     transactions.each do |kind, transaction|
       get api_v1_transaction_url(transaction), headers: api_headers(@api_key)
       assert_response :success
-      assert_equal expected_classifications.fetch(kind), JSON.parse(response.body).fetch("classification"), kind
+      row = JSON.parse(response.body)
+      assert_equal expected_classifications.fetch(kind), row.fetch("classification"), kind
+      assert_amount_cents_fields(row)
+      expected_cents = (expected_classifications.fetch(kind) == "income" ? 1 : -1) *
+                       (transaction.entry.amount.abs * 100).to_i
+      assert_equal expected_cents, row.fetch("signed_amount_cents"), kind
     end
 
     { "income" => [ "standard" ], "expense" => [ "refund", "one_time" ] }.each do |type, included|
@@ -120,7 +125,9 @@ class Api::V1::TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     get api_v1_transactions_url, params: { account_id: account.id }, headers: api_headers(@api_key)
     assert_response :success
-    actual_classifications = JSON.parse(response.body).fetch("transactions").to_h do |row|
+    rows = JSON.parse(response.body).fetch("transactions")
+    rows.each { |row| assert_amount_cents_fields(row) }
+    actual_classifications = rows.to_h do |row|
       [ row.fetch("name").delete_prefix("Semantic "), row.fetch("classification") ]
     end
     assert_equal expected_classifications, actual_classifications
