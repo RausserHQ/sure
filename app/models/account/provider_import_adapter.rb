@@ -214,7 +214,7 @@ class Account::ProviderImportAdapter
       # which reduce debt while remaining income.
       auto_kind = nil
       auto_category = nil
-      if entry.transaction.transfer && entry.transaction.extra&.key?("transfer_original_kind")
+      if entry.transaction.transfer
         auto_kind = entry.transaction.kind
       elsif Transaction::INTERNAL_MOVEMENT_LABELS.include?(detected_label)
         auto_kind = "funds_movement"

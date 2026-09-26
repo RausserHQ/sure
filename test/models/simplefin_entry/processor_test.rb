@@ -463,6 +463,41 @@ class SimplefinEntry::ProcessorTest < ActiveSupport::TestCase
     assert_equal "unclassified", credit.transaction.reload.kind
   end
 
+  test "legacy matched SimpleFIN credit keeps transfer kinds without restore markers" do
+    use_account(accounts(:credit_card), account_type: "credit card")
+    credit = process_transaction(id: "legacy_credit", amount: "43", payee: "Unknown", description: "CREDIT ADJUSTMENT")
+    use_account(accounts(:depository), account_type: "checking")
+    cash = process_transaction(id: "legacy_cash", amount: "-43", payee: "Bank", description: "Outgoing transfer")
+
+    transfer = Transfer.create!(inflow_transaction: credit.transaction, outflow_transaction: cash.transaction)
+    credit.transaction.update!(kind: "funds_movement")
+    cash.transaction.update!(kind: "funds_movement")
+    [ credit, cash ].each do |entry|
+      assert_not entry.transaction.reload.extra.key?("transfer_original_kind")
+      assert_not entry.user_modified?
+    end
+
+    use_account(accounts(:credit_card), account_type: "credit card")
+    process_transaction(id: "legacy_credit", amount: "43", payee: "Updated payee", description: "PURCHASE CREDIT")
+    use_account(accounts(:depository), account_type: "checking")
+    process_transaction(id: "legacy_cash", amount: "-43", payee: "Updated bank", description: "Outgoing transfer")
+    Family::Syncer.new(@family).perform_post_sync
+
+    assert_equal transfer.id, credit.transaction.reload.transfer.id
+    assert_equal transfer.id, cash.transaction.reload.transfer.id
+    assert_equal "Updated payee", credit.transaction.extra.dig("simplefin", "payee")
+    [ credit, cash ].each do |entry|
+      assert_equal "funds_movement", entry.transaction.kind
+      assert_equal "transfer", entry.transaction.cashflow_classification
+      assert_not entry.transaction.extra.key?("transfer_original_kind")
+      assert_not entry.reload.user_modified?
+    end
+
+    transfer.reject!
+    assert_equal "standard", credit.transaction.reload.kind
+    assert_equal "standard", cash.transaction.reload.kind
+  end
+
   test "synthetic payroll remains income across matching and repeat import" do
     family = families(:empty)
     @simplefin_account.update!(simplefin_item: SimplefinItem.create!(family: family, name: "Synthetic Bank", access_url: "https://example.com/synthetic"))
