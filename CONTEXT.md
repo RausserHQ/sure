@@ -41,3 +41,32 @@ An obligation outside the more specific debt categories. Its value may be stated
 
 **Projection**:
 A value estimated from assumptions about activity, rates, timing, or other conditions. It is distinct from observed or supported reconstructed history.
+
+**Principal repayment**:
+The portion of a payment allocated to reducing principal outstanding. It is distinct from interest, fees, and other components of the payment.
+_Avoid_: Expense as a synonym.
+
+**Borrowing**:
+Funds obtained by taking on debt. Borrowing is a source of financing, distinct from household income.
+
+**Expense**:
+A household cost recognized when a supported purchase or charge occurs. Paying a previously recognized cost or repaying principal does not create another expense.
+
+**Debt payment funding**:
+Funds needed or used to meet a debt payment, including any principal, interest, fees, and escrow within that payment. Funding and expense describe different aspects of activity and can overlap.
+_Avoid_: Expense as a synonym.
+
+**Escrow funding**:
+Money set aside for future costs, such as taxes or insurance, as part of a payment. Setting money aside is distinct from incurring the cost it will cover.
+
+**Purchase refund**:
+A return of some or all of the amount paid for a purchase. It reduces spending rather than creating income.
+
+**Reversal**:
+A genuine later event that undoes an earlier event's economic effect. It is distinct from correcting an erroneous record of what happened.
+
+**Record correction**:
+A revision to an inaccurate or duplicate record of an event. It changes the account of the original event rather than describing a new economic event.
+
+**Unresolved activity**:
+Recorded activity whose economic meaning or allocation is not established by the accepted evidence. Its known account movement can remain visible even when its contribution to reporting totals is uncertain.
