@@ -15,6 +15,9 @@ _Avoid_: Principal outstanding as a synonym.
 **Available credit**:
 The amount a borrower may still draw under a credit facility. It is borrowing capacity, not an amount already owed.
 
+**Account credit**:
+An established amount owed to the household by the lender, such as an overpayment credit. It is distinct from debt the household owes and from available credit for future borrowing.
+
 **Observed balance**:
 A value reported by a financial source or statement for a particular quantity and time. An observation can be retained even when the quantity it measures remains uncertain.
 
@@ -70,3 +73,9 @@ A revision to an inaccurate or duplicate record of an event. It changes the acco
 
 **Unresolved activity**:
 Recorded activity whose economic meaning or allocation is not established by the accepted evidence. Its known account movement can remain visible even when its contribution to reporting totals is uncertain.
+
+**Liability interpretation**:
+An explicit statement of what debt-related evidence means, including the quantity a balance measures or the meaning and allocation of activity. It applies to stated evidence or to matching evidence within declared conditions and dates.
+
+**History coverage declaration**:
+An explicit assertion that all changes to a particular quantity are accounted for over a stated interval. Complete cash-transaction history alone does not establish complete changes to principal or total liability.
