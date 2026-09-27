@@ -319,9 +319,12 @@ All liability-aware readers use them instead of deriving meaning separately from
 kind, sign, Transfer presence, or a category. Reports aggregate accepted economic
 components; raw movement lists retain signed source and Entry data and their
 distinct purpose. Legacy kinds remain compatibility/presentation data, not evidence.
-Entries represented by the new activity components leave the legacy aggregate
-path, including their asset-side counterpart entries. Other entries keep their
-existing conventions. An entry must never contribute through both paths.
+Route all in-scope liability activity, including its related asset-side
+counterpart entries, through the shared reporting contract whether or not it has
+supported components. In-scope activity without supported components remains
+unresolved and makes affected totals incomplete; it never falls back to legacy
+sign/kind classification. Only unrelated, out-of-scope entries retain legacy
+reporting conventions. An entry must never contribute through both paths.
 
 A quantity response contains amount or null, currency, quantity, boundary,
 support status and reasons, and authorized explanation references. An aggregate
@@ -413,8 +416,10 @@ zeros mean supported zero. These are required outcomes, not tests reported as ru
 | New interest then payment | Principal 1,000; charge interest 30; pay principal 90 plus interest 30 | Charge expense 30 once; payment funding 120; end principal and total 910. Combined overlapping plan requires 120, not 150. |
 | Separate periods | Charge interest 30 in January; settle it in February | January expense 30; February expense 0 and funding 30. |
 | Payroll to debt | Established wages 200 fully reduce principal; start principal/total 1,000 | Income 200; expense 0; funding/principal repayment 200; end principal/total 800. |
+| Payroll and separate repayment | Start principal/total 1,000. Two distinct source records each normalize to -200: supported payroll with zero debt effect, and a separate supported principal repayment with debt effect -200; no other changes | Income 200; expense 0; funding 200; end principal/total 800, not 600. Repeat import preserves these results without duplicate contributions. |
 | Borrowing | Draw 300 into checking, both legs recorded | Borrowing 300; income/expense/funding 0; debt increases 300; cash increases 300; one event. |
 | Unknown payment split | Verified payment 120; allocation and cost period unknown | Funding 120; affected expense and principal totals incomplete. Do not classify all 120 as expense or principal. |
+| No supported components | In-scope liability activity has amount -120 and an old loan-payment kind, but no supported components | Recorded movement stays visible; affected reporting totals are incomplete. Neither expense 120 nor income 120 may enter through legacy sign/kind fallback. |
 | Known settlement | Payment 120 proven to settle earlier debt; principal split unknown | New expense 0; funding 120; principal effect unavailable. |
 | Two legs | Mixed payment appears in checking and Loan, even with two old loan-payment labels | Funding 120 and supported expense once, not twice. Both movements inspectable. |
 | Card purchase/payment | Purchase 100; later payment 100, with supported meaning | Expense 100 at purchase; new expense 0 at payment; payment funding 100. |
@@ -448,8 +453,39 @@ separate transfer conventions.
 
 ## Dependency-ordered implementation handoff
 
-These are implementation work packages for a later effort, not new Wayfinder
-decision tickets and not authorization to execute migrations now.
+Use the dependencies below to guide small end-to-end implementation slices. They
+are a map of required capabilities, not a layer-by-layer ticket queue. Each slice
+should deliver a synthetic case across the relevant records, calculations, and
+readers before expanding to more cases. This remains a handoff for later work,
+not new Wayfinder decision tickets or authorization to execute migrations now.
+
+### First implementation slice
+
+Start with the **Payroll and separate repayment** acceptance case. Build the
+smallest path through retained evidence, accepted interpretation, supported
+liability results and reporting, an authorized read surface, and repeat import.
+
+1. Retain an opening principal/total-liability observation of 1,000 and two
+   distinct source records, each normalizing to an Entry amount of -200.
+2. Supply explicit accepted interpretations: the payroll record establishes
+   income 200 and zero debt effect; the separate principal repayment establishes
+   funding 200 and principal/total-liability changes of -200. Supply their
+   relationship, timing, and complete quantity coverage as fixture premises.
+   Names or amounts alone must not establish these meanings.
+3. Produce income 200, expense 0, funding 200, and closing principal/total 800.
+   Applying both raw amounts to debt would incorrectly produce 600; classifying
+   payroll as a loan-payment expense would also fail this case.
+4. Read those results and their support through one real authorized read path;
+   exercise account-access denial as well as the permitted result.
+5. Import the same records again. Results remain identical, with no duplicate
+   source revisions, income, funding, or debt effects. Include a missing-support
+   variant that remains unresolved instead of using legacy sign/kind reporting.
+
+Expand from this slice to mixed payments, conflicts/corrections, pending
+settlement, other liability types, and the remaining readers. The fixture is
+synthetic; its payroll/repayment relationship is not a universal provider rule.
+
+### Capability dependencies
 
 1. **Executable contracts and read boundaries.** Encode the matrix as independent
    Minitest fixtures and expected numbers. Define typed results and authorization
@@ -479,7 +515,7 @@ decision tickets and not authorization to execute migrations now.
    concurrency tests. Produce before/after compatibility and data inventories
    for the production-route decision. No automatic historical truth backfill.
 
-Independent implementation can follow these dependencies, but accepted evidence,
+Revisit these capabilities as each end-to-end case expands. Accepted evidence,
 activity identity, and reader contracts need one integrated design. No production
 cutover passes merely because the new calculator's unit tests pass.
 
