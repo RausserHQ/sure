@@ -114,10 +114,3 @@ policy source. The existing script writes `alwaysApply` to a different path and
 then overwrites its generated header; repairing the generator is separate work.
 The ignored `agent.mdc`, `dev_workflow.mdc` and `taskmaster.mdc` paths likewise
 remain local/generated context.
-
-[bin/codex-env](../../bin/codex-env) is a legacy Linux environment bootstrap,
-not the standard setup procedure or a skill. It installs system packages,
-changes PostgreSQL authentication, and can comment out the Ruby requirement
-and mark Gemfiles assume-unchanged when versions differ. It remains unchanged;
-use the maintained [development guide](development.md) for repository setup and
-checks.
