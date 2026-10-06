@@ -24,7 +24,6 @@ Use the single-context layout. See `docs/agents/domain.md`.
 - Ruby uses two-space indentation, `snake_case` methods/variables and `CamelCase` classes. JavaScript uses `lowerCamelCase` variables/functions and `PascalCase` classes; follow Biome. Keep domain logic out of ERB.
 - Never commit secrets; use environment variables and `.env.local` for local configuration.
 - Do not start `rails server`, touch `tmp/restart.txt`, run `rails credentials`, or automatically run migrations. Setup and database commands in the [development guide](docs/llm-guides/development.md) are for explicitly requested environment work.
-- In OpenHands, before implementation or validation, run `bash .openhands/setup.sh`. If it fails, stop rather than provisioning an alternate environment. Run repository tests through `bash .openhands/test.sh` so the pinned toolchain and isolated shared PostgreSQL test database are used.
 - New migrations use the current Rails migration version; leave historical migration versions intact.
 
 ## Tests and pull requests
